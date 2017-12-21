@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+  <style>
+    body {
+      margin: auto;
+      width: 960px;
+    }
+
+    text {
+      font: 10px sans-serif;
+    }
+
+    .y1.axis, .y1.axis path, .y1.axis line {
+      shape-rendering: crispEdges;
+      fill: none;
+      stroke: #FFA62F;
+    }
+    .y2.axis, .y2.axis path, .y2.axis line {
+      fill: none;
+      shape-rendering: crispEdges;
+      stroke: #2B65EC;
+    }
+
+    .x.axis, .x.axis line {
+      fill: none;
+      shape-rendering: crispEdges;
+      stroke: gray;
+    }
+
+    .x.axis line {
+      stroke-dasharray: 5 5;
+    }
+
+    .x.axis path {
+      display: none;
+    }
+
+    .crowdLine {
+      fill: none;
+      stroke: url(#crowdcount-gradient);
+      stroke-width: 3px;
+    }
+
+    .surfLine {
+      fill: none;
+      stroke: url(#surf-gradient);
+      stroke-width: 3px;
+    }
+
+  </style>
+  <body>
+    <!-- don't judge me -->
+    <br /><br /><br /> <br /><br /><br /> <br /><br /><br />
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function(event) { 
+
+        const xhr = new XMLHttpRequest();
+        const method = "GET";
+        const url = "http://localhost:3000/crowdtrends?startdate=2017-12-6&enddate=2017-12-14";
+
+        xhr.open(method, url, true);
+        xhr.onreadystatechange = function () {
+          if(xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+            const input = JSON.parse(xhr.responseText);
+
+            runApp(input);
+
+          }
+        };
+        xhr.send();
+      });
+
+
+
+  const runApp = (input) => {
+      /**** DATA MANIPULATION ****/
+      var crowdcountThreshold = 20;
+      var surfMinThreshold = 5;
+      var surfMaxThreshold = 12;
+
+      const crowdcountMin = 0;
+      const crowdcountMax = 50;
+      const surfMin = 0;
+      const surfMax = 60;
+
+      let crowdcountThresholdPercentage;
+      let surfMinThresholdPercentage;
+      let surfMaxThresholdPercentage;
+  
+      let go;
+      let data;
+
+      const setData = (crowdcountThreshold, surfMinThreshold, surfMaxThreshold) => {
+        crowdcountThresholdPercentage = 100 * ((crowdcountThreshold + 0.5) / (crowdcountMax - crowdcountMin));
+        surfMinThresholdPercentage = 100 * ((surfMinThreshold + 0.5) / (surfMax - surfMin));
+        surfMaxThresholdPercentage = 100 * ((surfMaxThreshold + 0.5) / (surfMax - surfMin));
+  
+        go = (crowdcount, surfHeight) => ((crowdcount <= crowdcountThreshold) && (surfHeight >= surfMinThreshold) && (surfHeight <= surfMaxThreshold));
+        data = input.map(d => ({ ...d, date: new Date(d.timestamp), go: go(d.crowdcount, d.maxHeight) }));
+      }
+      
+      setData(crowdcountThreshold, surfMinThreshold, surfMaxThreshold);
+
+
+      /**** LAYOUT ****/
+      const formatTime = d3.time.format("%a %_I%p");
+  
+      const margin = {top: 20, right: 20, bottom: 30, left: 50};
+      const width = 960 - margin.left - margin.right;
+      const height = 500 - margin.top - margin.bottom;
+
+      var x = d3.time.scale()
+        .range([0, width]);
+
+      const y1 = d3.scale.linear()
+        .range([height, 0]);
+    
+      const y2 = d3.scale.linear()
+        .range([height, 0]);
+
+      var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom")
+        // .ticks(20)
+        .tickSize(-height)
+        .tickFormat(d => {
+          // if (d.getHours() === 6) { return formatTime(d); }
+          // if (d.getHours() === 18) { return formatTime(d); }
+          return formatTime(d);
+        });
+
+      var yAxis1 = d3.svg.axis()
+        .scale(y1)
+        .orient("left");
+
+      var yAxis2 = d3.svg.axis()
+        .scale(y2)
+        .orient("right");
+
+      var crowdLine = d3.svg.line()
+        .interpolate("monotoneX")
+        .x(function(d) { return x(d.date); })
+        .y(function(d) { return y1(d.crowdcount); });
+
+      var surfLine = d3.svg.line()
+        .interpolate("monotoneX")
+        .x(function(d) { return x(d.date); })
+        .y(function(d) { return y2(d.maxHeight); });
+
+        
+        
+      var svg = d3.select("body").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    
+      x.domain([data[0].date, data[data.length - 1].date]);
+      y1.domain([0, crowdcountMax]);
+      y2.domain([0, surfMax]);
+
+      svg.append("g")
+          .attr("class", "x axis")
+          .attr("transform", "translate(0," + height + ")")
+        .call(xAxis);
+
+      svg.append("g")
+          .attr("class", "y1 axis")
+        .call(yAxis1)
+        .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 10)
+          .attr("x", -5)
+          .style("text-anchor", "end")
+          .text("number of surfers");
+
+      svg.append("g")
+          .attr("class", "y2 axis")
+          .attr("transform", "translate(" + width + ", 0)")
+        .call(yAxis2)
+        .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", -5)
+          .attr("x", -5)
+          .style("text-anchor", "end")
+          .text("surf height in feet");
+  
+    const lineContainer = svg.append("g");
+    const appendAllTheTHINGS = () => {
+      lineContainer.append("linearGradient")
+          .attr("id", "crowdcount-gradient")
+          .attr("gradientUnits", "userSpaceOnUse")
+          .attr("x1", 0).attr("y1", y1(crowdcountMin))
+          .attr("x2", 0).attr("y2", y1(crowdcountMax))
+        .selectAll("stop")
+          .data([
+            {offset: `${crowdcountThresholdPercentage}%`, color: "#FFA62F"},
+            {offset: `${crowdcountThresholdPercentage}%`, color: "#FFE5B4"},
+          ])
+        .enter().append("stop")
+          .attr("offset", function(d) { return d.offset; })
+          .attr("stop-color", function(d) { return d.color; });
+      
+      lineContainer.append("linearGradient")
+          .attr("id", "surf-gradient")
+          .attr("gradientUnits", "userSpaceOnUse")
+          .attr("x1", 0).attr("y1", y2(surfMin))
+          .attr("x2", 0).attr("y2", y2(surfMax))
+        .selectAll("stop")
+          .data([
+            {offset: `${surfMinThresholdPercentage}%`, color: "#E0FFFF"},
+            {offset: `${surfMinThresholdPercentage}%`, color: "#2B65EC"},
+            {offset: `${surfMaxThresholdPercentage}%`, color: "#2B65EC"},
+            {offset: `${surfMaxThresholdPercentage}%`, color: "#E0FFFF"},
+          ])
+        .enter().append("stop")
+          .attr("offset", function(d) { return d.offset; })
+          .attr("stop-color", function(d) { return d.color; });
+
+      lineContainer.append("path")
+          .datum(data)
+          .attr("class", "crowdLine")
+          .attr("d", crowdLine);
+
+      lineContainer.append("path")
+          .datum(data)
+          .attr("class", "surfLine")
+          .attr("d", surfLine);
+
+
+      lineContainer.selectAll(".bar")
+        .data(data)
+        .enter().append("rect")
+          .attr("class", "bar")
+          .attr("x", function(d) { return x(d.date) - 3.5; })
+          .attr("y", function(d) { return y1(1); })
+          .attr("width", "7px")
+          .attr("height", function(d) { return height - y1(d.go ? 1 : 0); })
+          .style("fill", d => {
+            if ((d.rating === "FLAT") || (d.rating === 'VERY_POOR')) {
+              return "gray";
+            } else if ((d.rating === "POOR") || (d.rating === 'POOR_TO_FAIR')) {
+              return "lightBlue"
+            } else if ((d.rating === "FAIR") || (d.rating === 'FAIR_TO_GOOD')) {
+              return "green"
+            } else if ((d.rating === "GOOD") || (d.rating === 'VERY_GOOD')) {
+              return "orange"
+            } else if ((d.rating === "GOOD_TO_EPIC") || (d.rating === 'EPIC')) {
+              return "red"
+            }
+          });
+    };
+    appendAllTheTHINGS();
+
+    
+      /**** DRAGGING ****/
+
+      const dragContainer = svg.append("g");
+      const crowdcountThresholdCircle = {
+        x: -8,
+        y: y1(crowdcountThreshold) - 8
+      };
+      dragContainer.selectAll("rect")
+        .data([crowdcountThresholdCircle])
+        .enter().append("rect")
+        .style("fill", "#FFA62F")
+        .attr("x", function(d) { return d.x; })
+        .attr("y", function(d) { return d.y; })
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("rx", 16)
+        .attr("ry", 16)
+      .call(d3.behavior.drag()
+          .on("drag", crowdcountThresholdDragged)
+      );
+  
+      function crowdcountThresholdDragged(d) {
+        d3.select(this).attr("y", d.y = withinRange(d3.event.y, -8, height - 8));
+        crowdcountThreshold = Math.round(crowdcountMax - (y1.invert(height - d3.event.y - 8)));
+        setData(crowdcountThreshold, surfMinThreshold, surfMaxThreshold);
+        deleteAllTheTHINGS();
+        appendAllTheTHINGS();
+      }
+
+
+      const surfMinThresholdCircle = {
+        x: width,
+        y: y2(surfMinThreshold)
+      };
+      dragContainer.selectAll("ellipse")
+          .data([surfMinThresholdCircle])
+        .enter().append("ellipse")
+          .style("fill", "lightBlue")
+          .attr("cx", function(d) { return d.x; })
+          .attr("cy", function(d) { return d.y; })
+          .attr("rx", 8)
+          .attr("ry", 8)
+        .call(d3.behavior.drag()
+          .on("drag", surfMinThresholdDragged)
+        );
+
+      function surfMinThresholdDragged(d) {
+        const newY = withinRange(d3.event.y, Math.max(0, y2(surfMaxThreshold) + 16), height);
+        d3.select(this).attr("cy", d.y = newY);
+        surfMinThreshold = Math.round(surfMax - (y2.invert(height - newY)));
+        setData(crowdcountThreshold, surfMinThreshold, surfMaxThreshold);
+        deleteAllTheTHINGS();
+        appendAllTheTHINGS();
+      }
+
+      
+      const surfMaxThresholdCircle = {
+        x: width,
+        y: y2(surfMaxThreshold)
+      };
+      dragContainer.selectAll("circle")
+        .data([surfMaxThresholdCircle])
+        .enter().append("circle")
+        .style("fill", "darkBlue")
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .attr("r", 8)
+      .call(d3.behavior.drag()
+          .on("drag", surfMaxThresholdDragged)
+      );
+      function surfMaxThresholdDragged(d) {
+        const newY = withinRange(d3.event.y, 0, Math.min(y2(surfMinThreshold) - 16, height));
+        d3.select(this).attr("cy", d.y = newY);
+        surfMaxThreshold = Math.round(surfMax - (y2.invert(height - newY)));
+        setData(crowdcountThreshold, surfMinThreshold, surfMaxThreshold);
+        deleteAllTheTHINGS();
+        appendAllTheTHINGS();
+      }
+
+
+      /** HELPERS **/
+
+      const withinRange = (y, ymin, ymax) => {
+        if (y < ymin) {
+          return ymin;
+        } else if (y > ymax) {
+          return ymax;
+        }
+        return y;
+      }
+
+      const deleteAllTheTHINGS = () => {
+        svg.selectAll("linearGradient").remove();
+        svg.selectAll(".crowdLine").remove();
+        svg.selectAll(".surfLine").remove();
+        svg.selectAll(".bar").remove();
+      }
+    };
+
+
+
+    </script>
+  </body>
+</meta>
