@@ -1,3 +1,5 @@
+#### This is a simple node app I created for a Hackathon project. The node app acts as a storage and retrieval system.
+
 # Crowd Trends - API - Setup instructions
 
 #### Node version: `8 or above`
